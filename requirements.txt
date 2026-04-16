@@ -1,5 +1,7 @@
-numpy
-torch
-datasets
 transformers
-scipy
+matplotlib
+datasets
+seaborn
+pandas
+torch
+numpy
