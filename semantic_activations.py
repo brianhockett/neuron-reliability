@@ -48,7 +48,7 @@ def compute_activations(sentence, tokenizer, model):
 
 
 # Extract top-k neurons from precomputed activations for a given layer
-def get_top_k_from_activations(layer_activations, layer_index, k = 50):
+def get_top_k_from_activations(layer_activations, layer_index, k = 5):
     
     neuron_scores = layer_activations[layer_index].max(axis = 0)  # max across tokens
     top_k_indices = set(np.argsort(neuron_scores)[-k:])
@@ -57,12 +57,12 @@ def get_top_k_from_activations(layer_activations, layer_index, k = 50):
 
 
 # Compute intersection rate between two sets of top-k neuron indices
-def intersection_rate(set_a, set_b, k = 50):
+def intersection_rate(set_a, set_b, k = 5):
     return len(set_a & set_b) / k
 
 
 # Run analysis for a single layer using cached activations
-def run_layer_analysis(dataset_activations, layer_index, k = 50):
+def run_layer_analysis(dataset_activations, layer_index, k = 5):
     
     similar_intersections = []
     random_intersections = []
@@ -90,7 +90,7 @@ def run_layer_analysis(dataset_activations, layer_index, k = 50):
 
 
 # Run analysis across all layers using cached activations
-def run_analysis_all_layers(min_score = 0.8, max_score = 1.0, k = 50):
+def run_analysis_all_layers(min_score = 0.8, max_score = 1.0, k = 5):
     
     # Load dataset
     dataset = load_stsb(min_score, max_score)
@@ -124,44 +124,51 @@ def run_analysis_all_layers(min_score = 0.8, max_score = 1.0, k = 50):
 
 # Plot intersection rate trends across layers
 def plot_by_layer(results_by_layer, k):
-    
+
     layers = sorted(results_by_layer.keys())
-    
+    layer_labels = [l + 1 for l in layers]  # Display as 1-12 instead of 0-11
+
     sim_means = [np.mean(results_by_layer[l]['similar']) for l in layers]
     sim_stds  = [np.std(results_by_layer[l]['similar']) for l in layers]
     ran_means = [np.mean(results_by_layer[l]['random']) for l in layers]
     ran_stds  = [np.std(results_by_layer[l]['random']) for l in layers]
 
-    plt.figure(figsize = (14, 6))
+    plt.figure(figsize = (10, 5))
 
     # Plot similar pairs
-    plt.plot(layers, sim_means, marker = 'o', color = 'steelblue', label = 'Similar Pairs', linewidth = 2.5)
-    plt.fill_between(layers, 
-                     np.array(sim_means) - np.array(sim_stds), 
-                     np.array(sim_means) + np.array(sim_stds), 
-                     color = 'steelblue', alpha = 0.2)
+    plt.plot(layer_labels, sim_means, marker = 'o', color = 'steelblue',
+             label = 'Similar Pairs', linewidth = 2.5, zorder = 3)
+    plt.fill_between(layer_labels,
+                     np.array(sim_means) - np.array(sim_stds),
+                     np.array(sim_means) + np.array(sim_stds),
+                     color = 'steelblue', alpha = 0.15)
 
     # Plot random pairs
-    plt.plot(layers, ran_means, marker = 's', color = 'salmon', label = 'Random Pairs', linewidth = 2.5)
-    plt.fill_between(layers, 
-                     np.array(ran_means) - np.array(ran_stds), 
-                     np.array(ran_means) + np.array(ran_stds), 
-                     color = 'salmon', alpha = 0.2)
+    plt.plot(layer_labels, ran_means, marker = 's', color = 'salmon',
+             label = 'Random Pairs', linewidth = 2.5, zorder = 3)
+    plt.fill_between(layer_labels,
+                     np.array(ran_means) - np.array(ran_stds),
+                     np.array(ran_means) + np.array(ran_stds),
+                     color = 'salmon', alpha = 0.15)
 
     # Formatting
-    plt.title(f'Top-{k} Neuron Intersection Rate by Layer', fontsize = 14, pad = 25, fontweight = 'bold')
-    plt.xlabel('BERT Layer', fontsize = 12)
-    plt.ylabel('Intersection Rate', fontsize = 12)
-    plt.xticks(layers)
+    plt.title(f'Top-{k} Neuron Intersection Rate by Layer',
+              fontsize = 14, pad = 25, fontweight = 'bold')
+    plt.xlabel('BERT Layer', fontsize = 13, fontweight = 'bold')
+    plt.ylabel('Intersection Rate', fontsize = 13, fontweight = 'bold')
+    plt.xticks(layer_labels, fontsize = 11)
+    plt.yticks(fontsize = 11)
     plt.ylim(0, 1.05)
-    plt.grid(True, linestyle = '--', alpha = 0.5)
-    
+    plt.grid(True, linestyle = '--', alpha = 0.3, zorder = 0)
+
     # Legend horizontally below the title, no frame
-    plt.legend(fontsize = 11, loc = 'upper center', ncol = 2, frameon = False, bbox_to_anchor = (0.5, 1.08))
-    
-    sns.despine(left = False, bottom = False)  # remove top and right spines
+    plt.legend(fontsize = 12, loc = 'upper center', ncol = 2,
+               frameon = False, bbox_to_anchor = (0.5, 1.065))
+
+    sns.despine(left = False, bottom = False)
     plt.tight_layout()
-    plt.savefig("intersection_comparison.png", dpi = 150)
+    plt.savefig("intersection_comparison.png", dpi = 300, bbox_inches = "tight")
+    plt.savefig("intersection_comparison.pdf", bbox_inches = "tight")
     plt.show()
 
 
@@ -178,7 +185,7 @@ def plot_boxplot(results_by_layer, k):
 
     df = pd.DataFrame(data)
 
-    plt.figure(figsize = (14, 6))
+    plt.figure(figsize = (10, 7))
     sns.boxplot(data = df, x = 'Layer', y = 'Intersection Rate', hue = 'Pair Type',
                 palette = {'Similar Pairs': 'steelblue', 'Random Pairs': 'salmon'},
                 fliersize = 5, linewidth = 1.2, gap = 0.2)
@@ -193,7 +200,8 @@ def plot_boxplot(results_by_layer, k):
 
     sns.despine(left = False, bottom = False)
     plt.tight_layout()
-    plt.savefig("intersection_boxplot.png", dpi = 150)
+    plt.savefig("intersection_boxplot.png", dpi = 300)
+    plt.savefig("intersection_boxplot.pdf", bbox_inches = "tight")
     plt.show()
 
 

@@ -29,7 +29,7 @@ def remove_word(sentence, word):
     return sentence
 
 # Function to create a modified DataFrame where the target word is removed from all sentences
-def create_half_removed_df(df):
+def create_removed_df(df):
 
     # Copy dataframe
     df_mod = df.copy()
@@ -172,61 +172,124 @@ def plot_comparison(original_results, removed_results):
     # Get list of words from the results
     words = list(original_results.keys())
 
-    # Initialize the figure and axes for subplots
-    fig, axes = plt.subplots(len(words), 2, figsize = (16, 4*len(words)), sharey = True)
+    # Scale figure width dynamically based on number of words
+    fig, axes = plt.subplots(1, len(words), figsize = (5 * len(words), 7), sharey = True)
+
+    # Handle the case where there is only one word (axes would not be a list)
+    if len(words) == 1:
+        axes = [axes]
+
+    # Define color scheme for continuity (Teal for Present, Salmon for Removed)
+    present_color = "steelblue"
+    removed_color = "salmon"
 
     # Loop through each target word
     for i, word in enumerate(words):
+        ax = axes[i]
 
-        # Loop through original and removed results for the word
-        for j, (results, label) in enumerate([(original_results, "Present"), (removed_results, "Removed")]):
+        # Extract data for the current word
+        indices = original_results[word]["indices"]
+        present_pcts = original_results[word]["percentages"]
+        removed_pcts = removed_results[word]["percentages"]
 
-            # Get current axis for plotting
-            ax = axes[i][j]
+        # Compute Activation Drop Rate: mean percentage point drop across top 10 neurons
+        max_drop = np.max(present_pcts - removed_pcts)
 
-            # Get neuron indices and activation percentages for the current condition
-            indices = results[word]["indices"]
-            pcts = results[word]["percentages"]
+        # Create x-axis labels based on neuron indices (convert to string for categorical plotting)
+        x_labels = [str(idx) for idx in indices]
 
-            # Create x-axis labels based on neuron indices
-            x_labels = [str(i) for i in indices]
+        # Create a temporary DataFrame to make Seaborn plotting straightforward
+        plot_df = pd.DataFrame({
+            'Neuron Index': x_labels,
+            'Present': present_pcts,
+            'Removed': removed_pcts
+        })
 
-            # Plot bar chart of activation percentages for the identified neurons
-            sns.barplot(
-                x = x_labels,
-                y = pcts,
-                ax = ax,
-                palette = "viridis",
-                hue = x_labels,
-                legend = False
-            )
+        # Plot Base Layer (Wider bars, Target Word Present)
+        sns.barplot(
+            x = 'Neuron Index',
+            y = 'Present',
+            data = plot_df,
+            ax = ax,
+            color = present_color,
+            width = 0.85,
+            edgecolor = present_color,
+            alpha = 0.85,
+            label = "Present"
+        )
 
-            # Set y-axis limits and labels
-            ax.set_ylim(0, 105)
-            ax.set_xlabel("Neuron Index")
+        # Plot Overlaid Layer (Narrower bars, Target Word Removed)
+        sns.barplot(
+            x = 'Neuron Index',
+            y = 'Removed',
+            data = plot_df,
+            ax = ax,
+            color = removed_color,
+            width = 0.55,
+            edgecolor = "white",   # White edge separates overlay from base bar
+            alpha = 0.85,
+            label = "Removed"
+        )
 
-            if j == 0:
-                ax.set_ylabel("Activation Frequency (%)")
-            else:
-                ax.set_ylabel("")
+        # Formatting & De-cluttering
+        ax.set_ylim(0, 105)
+        ax.set_xlabel("Neuron Index", fontsize = 12, fontweight = 'bold')
+        ax.set_title(f"{word.upper()}", fontsize = 15, fontweight = "bold")
+        ax.tick_params(axis = 'both', labelsize = 10)
 
-            # Set title for each subplot
-            ax.set_title(f"{word} — {label}", fontweight = "bold")
+        # Annotate with Activation Drop Rate just below the top of the subplot
+        ax.text(
+            x = 0.5,
+            y = 0.995,
+            s = f"Max Drop: {max_drop:.1f}%",
+            transform = ax.transAxes,
+            ha = 'center',
+            va = 'top',
+            fontsize = 11,
+            fontweight = 'bold',
+            color = 'dimgray',
+            # bbox = dict(boxstyle = 'round,pad=0.3', facecolor = 'white', edgecolor = 'lightgray', alpha = 0.8)
+        )
 
-            # Remove top and right spines for cleaner look
-            sns.despine(ax = ax)
+        # Only set Y-axis label on the leftmost plot
+        if i == 0:
+            ax.set_ylabel("Activation Frequency (%)", fontweight = "bold", fontsize = 14)
+        else:
+            ax.set_ylabel("")
+
+        # Remove top and right spines for a cleaner look
+        sns.despine(ax = ax, top = True, right = True)
+
+        # Add subtle horizontal grid lines for readability
+        ax.grid(axis = 'y', linestyle = '--', alpha = 0.3, color = '#CCCCCC')
+
+        # Remove the per-subplot legend (unified legend is added below)
+        ax.get_legend().remove()
 
     # Add super title for the entire figure
     plt.suptitle(
-        "Neuron Activation With vs Without Target Word\n(Top 10 Neurons from Sentences With Target Word Present)",
-        fontsize = 14,
+        "Top-10 Neuron Activation Frequencies: Target Word Present vs. Removed",
+        fontsize = 18,
         fontweight = "bold",
-        y = 1.01
+        y = 1.03
+    )
+
+    # Add a single unified legend centered under the title, in row format
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc = 'upper center',
+        bbox_to_anchor = (0.5, 0.9975),
+        ncol = len(handles),
+        frameon = False,
+        prop = {'size': 12, 'weight': 'bold'}
     )
 
     # Show and save the plot
     plt.tight_layout()
-    plt.savefig("lexical_comparison.png", dpi = 150, bbox_inches = "tight")
+    plt.savefig("lexical_comparison.png", dpi = 300, bbox_inches = "tight")
+    plt.savefig("lexical_comparison.pdf", bbox_inches = "tight")
     plt.show()
 
 
@@ -243,7 +306,7 @@ if __name__ == "__main__":
     top_neurons = find_top_neurons(df, tokenizer, model)
 
     # Create modified dataset
-    df_removed = create_half_removed_df(df)
+    df_removed = create_removed_df(df)
 
     # Measure activation in both conditions
     original_results = evaluate_neurons(df, tokenizer, model, top_neurons)
